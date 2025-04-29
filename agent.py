@@ -1,74 +1,73 @@
 import itertools
 import copy
 
+class FormulaTransformer:
+    @staticmethod
+    def negate(literal):
+        if literal.startswith('~'):
+            return literal[1:]
+        else:
+            return '~' + literal
 
-class BeliefBase:
-    def __init__(self):
-        """Initialize an empty belief base with a list to hold (priority, formula) tuples."""
-        self.beliefs = []
-
-    def add_belief(self, formula, priority=0):
-        """Add a belief with an associated priority to the belief base."""
-        self.beliefs.append((priority, formula))
-        self.beliefs.sort(reverse=True)
-
-    def remove_belief(self, formula):
-        """Remove a specific belief from the belief base."""
-        self.beliefs = [(p, f) for (p, f) in self.beliefs if f != formula]
-
-    def get_formulas(self):
-        """Return a list of all belief formulas in the belief base."""
-        return [f for (_, f) in self.beliefs]
-
-    def entails(self, query):
-        """Check if the belief base entails a given query using resolution."""
-        clauses = [self.to_cnf(formula) for formula in self.get_formulas()]
-        query_cnf = self.to_cnf(f"~({query})")
-        all_clauses = list(itertools.chain(*clauses)) + query_cnf
-        return self.resolution(all_clauses)
-
-    def expand(self, formula):
-        """Expand the belief base by adding a new belief."""
-        self.add_belief(formula)
-
-    def contract(self, formula):
-        """Contract the belief base by removing beliefs to no longer entail the given formula."""
-        if self.entails(formula):
-            for priority, belief in sorted(self.beliefs, key=lambda x: -x[0]):
-                temp_beliefs = copy.deepcopy(self)
-                temp_beliefs.remove_belief(belief)
-                if not temp_beliefs.entails(formula):
-                    self.remove_belief(belief)
-                    break
-
-    def to_cnf(self, formula):
-        """Convert a formula to a naive conjunctive normal form (CNF)."""
-        formula = formula.replace("=>", ")|(").replace("<=>", ")=(")
+    @staticmethod
+    def to_cnf(formula):
         formula = formula.replace(" ", "")
-        literals = formula.replace("(", "").replace(")", "").split("|")
-        return [[lit] for lit in literals]
 
-    def resolve(self, ci, cj):
-        """Resolve two clauses and return the resulting resolvents."""
+        if "=>" in formula:
+            parts = formula.split("=>")
+            left = parts[0]
+            right = parts[1]
+            return [[FormulaTransformer.negate(left), right]]
+
+        if "<=>" in formula:
+            parts = formula.split("<=>")
+            left = parts[0]
+            right = parts[1]
+            return [[FormulaTransformer.negate(left), right], [left, FormulaTransformer.negate(right)]]
+
+        if formula.startswith("~(") and formula.endswith(")"):
+            inner = formula[2:-1]
+            if "&" in inner:
+                a, b = inner.split("&")
+                return [[FormulaTransformer.negate(a)], [FormulaTransformer.negate(b)]]
+            elif "|" in inner:
+                a, b = inner.split("|")
+                return [[FormulaTransformer.negate(a), FormulaTransformer.negate(b)]]
+            else:
+                return [[FormulaTransformer.negate(inner)]]
+
+        if "&" in formula:
+            literals = formula.split("&")
+            return [[lit] for lit in literals]
+
+        if "|" in formula:
+            literals = formula.split("|")
+            return [literals]
+
+        return [[formula]]
+
+class ResolutionChecker:
+    @staticmethod
+    def resolve(ci, cj):
         resolvents = []
         for di in ci:
             for dj in cj:
-                if di == self.negate(dj):
+                if di == FormulaTransformer.negate(dj):
                     new_clause = list(set(ci + cj))
                     new_clause.remove(di)
                     new_clause.remove(dj)
                     resolvents.append(new_clause)
         return resolvents
 
-    def resolution(self, clauses):
-        """Apply the resolution algorithm to check satisfiability of clauses."""
+    @staticmethod
+    def resolution(clauses):
         new = set()
-        clauses = [frozenset(clause) for clause in clauses]
+        clauses = set(frozenset(clause) for clause in clauses)
 
         while True:
             pairs = [(ci, cj) for ci in clauses for cj in clauses if ci != cj]
-            for ci, cj in pairs:
-                resolvents = self.resolve(list(ci), list(cj))
+            for (ci, cj) in pairs:
+                resolvents = ResolutionChecker.resolve(list(ci), list(cj))
                 for resolvent in resolvents:
                     if not resolvent:
                         return True
@@ -77,27 +76,82 @@ class BeliefBase:
                 return False
             clauses.update(new)
 
-    def negate(self, literal):
-        """Negate a literal (add or remove the negation symbol)."""
-        if literal.startswith("~"):
-            return literal[1:]
-        else:
-            return "~" + literal
+class BeliefBase:
+    def __init__(self):
+        self.beliefs = []
 
+    def add_belief(self, formula, priority=0):
+        self.beliefs.append((priority, formula))
+        self.beliefs.sort(reverse=True)
+
+    def remove_belief(self, formula):
+        self.beliefs = [(p, f) for (p, f) in self.beliefs if f != formula]
+
+    def get_formulas(self):
+        return [f for (_, f) in self.beliefs]
+
+    def entails(self, query):
+        clauses = [FormulaTransformer.to_cnf(formula) for formula in self.get_formulas()]
+        query_cnf = FormulaTransformer.to_cnf(f"~({query})")
+        all_clauses = list(itertools.chain(*clauses)) + query_cnf
+        return ResolutionChecker.resolution(all_clauses)
+
+    def expand(self, formula):
+        if not self.entails(FormulaTransformer.negate(formula)):
+            self.add_belief(formula)
+
+    def contract(self, formula):
+        if self.entails(formula):
+            for priority, belief in sorted(self.beliefs, key=lambda x: -x[0]):
+                temp_beliefs = copy.deepcopy(self)
+                temp_beliefs.remove_belief(belief)
+                if not temp_beliefs.entails(formula):
+                    self.remove_belief(belief)
+                    break
+
+    def revise(self, formula):
+        self.contract(FormulaTransformer.negate(formula))
+        self.expand(formula)
+
+    def agm_postulates_test(self, formula):
+        print("\nTesting AGM Postulates for:", formula)
+
+        original_beliefs = copy.deepcopy(self)
+
+        self.expand(formula)
+        success = self.entails(formula)
+        print("Success:", success)
+
+        inclusion = set(original_beliefs.get_formulas()).issubset(set(self.get_formulas()))
+        print("Inclusion:", inclusion)
+
+        before = set(self.get_formulas())
+        self.expand(formula)
+        after = set(self.get_formulas())
+        vacuity = before == after
+        print("Vacuity:", vacuity)
+
+        consistency = not self.entails("False")
+        print("Consistency:", consistency)
+
+        formula_negated_negated = FormulaTransformer.negate(FormulaTransformer.negate(formula))
+        ext_base = copy.deepcopy(original_beliefs)
+        ext_base.expand(formula_negated_negated)
+        extensionality = set(self.get_formulas()) == set(ext_base.get_formulas())
+        print("Extensionality:", extensionality)
 
 if __name__ == "__main__":
     bb = BeliefBase()
 
-    # Initial beliefs
     bb.expand("A")
-    bb.expand("A => B")
+    bb.expand("A=>B")
 
     print("Beliefs:", bb.get_formulas())
-
     print("Entails B?", bb.entails("B"))
 
-    # Contract B
     bb.contract("B")
 
     print("Beliefs after contracting B:", bb.get_formulas())
     print("Entails B now?", bb.entails("B"))
+
+    bb.agm_postulates_test("C")
