@@ -5,15 +5,10 @@ from sympy import simplify_logic
 
 
 # Define propositional symbols
-p, q, r = symbols('p q r')
+p, q, r = symbols("p q r")
 
 # Define a belief base (a set of formulas)
-belief_base = [
-    p,
-    Implies(p, q),
-    q | p ,
-    And(p, q)
-]
+belief_base = [p, Implies(p, q), q | p, And(p, q)]
 
 print("Belief Base:", belief_base)
 
@@ -22,6 +17,7 @@ def is_consistent(beliefs):
     combined = And(*beliefs)
     return bool(satisfiable(combined))
 
+
 print("Consistent?", is_consistent(belief_base))
 
 
@@ -29,7 +25,7 @@ def partial_meet_contraction(beliefs, p):
     from itertools import chain, combinations
 
     def all_subsets(s):
-        return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+        return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
 
     maximal_subsets = []
 
@@ -49,9 +45,11 @@ def partial_meet_contraction(beliefs, p):
                 maximal_subsets.append(subset)
     return maximal_subsets
 
+
 def implies(beliefs, formula):
     combined = And(*beliefs)
     return not satisfiable(And(combined, Not(formula)))
+
 
 reduced_sets = partial_meet_contraction(belief_base, p)
 
@@ -64,16 +62,20 @@ def equivalent(f1, f2):
     """Check semantic equivalence of two formulas."""
     return simplify_logic(f1) == simplify_logic(f2)
 
+
 # Unit tests for AGM algorithm
+
 
 def postulate_success(revise_fn, base, phi):
     revised = revise_fn(base, phi)
     return implies(revised, phi)
 
+
 def postulate_inclusion(revise_fn, base, phi):
     revised = revise_fn(base, phi)
     expanded = base + [phi]
     return all(any(implies([b], r) for b in expanded) for r in revised)
+
 
 def postulate_vacuity(revise_fn, base, phi):
     if implies(base, Not(phi)):
@@ -82,9 +84,11 @@ def postulate_vacuity(revise_fn, base, phi):
     expanded = base + [phi]
     return set(revised) == set(expanded)
 
+
 def postulate_consistency(revise_fn, base, phi):
     revised = revise_fn(base, phi)
     return satisfiable(And(*revised)) != False
+
 
 def postulate_extensionality(revise_fn, base, phi, psi):
     if not equivalent(phi, psi):
