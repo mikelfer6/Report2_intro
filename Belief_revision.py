@@ -4,7 +4,7 @@ import pygame
 import time
 
 # Constants
-COLORS = [1, 2, 3, 4]  # You can define colors 1-6
+COLORS = [1, 2, 3, 4, 5, 6]  # Updated to 6 colors
 CODE_LENGTH = 4  # Code is 4 colors
 
 # --- Belief Revision Engine for Mastermind ---
