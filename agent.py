@@ -4,6 +4,7 @@ import copy
 class FormulaTransformer:
     @staticmethod
     def negate(literal):
+        literal = literal.replace("\u00ac", "~")  # Support ¬ for NOT
         if literal.startswith('~'):
             return literal[1:]
         else:
@@ -12,6 +13,7 @@ class FormulaTransformer:
     @staticmethod
     def to_cnf(formula):
         formula = formula.replace(" ", "")
+        formula = formula.replace("->", "=>").replace("<->", "<=>").replace("\u00ac", "~")
 
         if "=>" in formula:
             parts = formula.split("=>")
@@ -81,8 +83,9 @@ class BeliefBase:
         self.beliefs = []
 
     def add_belief(self, formula, priority=0):
-        self.beliefs.append((priority, formula))
-        self.beliefs.sort(reverse=True)
+        if formula not in self.get_formulas():
+            self.beliefs.append((priority, formula))
+            self.beliefs.sort(reverse=True)
 
     def remove_belief(self, formula):
         self.beliefs = [(p, f) for (p, f) in self.beliefs if f != formula]
@@ -99,6 +102,8 @@ class BeliefBase:
     def expand(self, formula):
         if not self.entails(FormulaTransformer.negate(formula)):
             self.add_belief(formula)
+        else:
+            print(f"Belief '{formula}' was not added because it contradicts current beliefs.")
 
     def contract(self, formula):
         if self.entails(formula):
@@ -114,44 +119,95 @@ class BeliefBase:
         self.expand(formula)
 
     def agm_postulates_test(self, formula):
-        print("\nTesting AGM Postulates for:", formula)
+        print("\nTesting all AGM Postulates for:", formula)
 
-        original_beliefs = copy.deepcopy(self)
+        # Use a copy to avoid modifying the actual belief base
+        test_base = copy.deepcopy(self)
 
-        self.expand(formula)
-        success = self.entails(formula)
-        print("Success:", success)
+        test_base.expand(formula)
+        print("1. Success:", test_base.entails(formula))
 
-        inclusion = set(original_beliefs.get_formulas()).issubset(set(self.get_formulas()))
-        print("Inclusion:", inclusion)
+        original_formulas = set(self.get_formulas())
+        updated_formulas = set(test_base.get_formulas())
+        print("2. Inclusion:", original_formulas.issubset(updated_formulas))
 
-        before = set(self.get_formulas())
-        self.expand(formula)
-        after = set(self.get_formulas())
-        vacuity = before == after
-        print("Vacuity:", vacuity)
+        before = set(test_base.get_formulas())
+        test_base.expand(formula)
+        after = set(test_base.get_formulas())
+        print("3. Vacuity:", before == after)
 
-        consistency = not self.entails("False")
-        print("Consistency:", consistency)
+        print("4. Consistency:", not test_base.entails("False"))
 
         formula_negated_negated = FormulaTransformer.negate(FormulaTransformer.negate(formula))
-        ext_base = copy.deepcopy(original_beliefs)
+        ext_base = copy.deepcopy(self)
         ext_base.expand(formula_negated_negated)
-        extensionality = set(self.get_formulas()) == set(ext_base.get_formulas())
-        print("Extensionality:", extensionality)
+        print("5. Extensionality:", set(test_base.get_formulas()) == set(ext_base.get_formulas()))
 
 if __name__ == "__main__":
     bb = BeliefBase()
 
-    bb.expand("A")
-    bb.expand("A=>B")
+    while True:
+        print("\nBELIEF BASE MENU")
+        print("1. Add a belief")
+        print("2. Remove a belief")
+        print("3. Show belief base")
+        print("4. Contract a belief")
+        print("5. Revise a belief")
+        print("6. Check entailment")
+        print("7. Test AGM postulates")
+        print("0. Exit")
 
-    print("Beliefs:", bb.get_formulas())
-    print("Entails B?", bb.entails("B"))
+        choice = input("Choose an option: ")
+        show_after = True
 
-    bb.contract("B")
+        if choice == "1":
+            print("Add a belief to the base. Example: A, A->B, A<->B, A&B, A|B, ¬A")
+            belief = input("Enter the belief to add: ")
+            bb.expand(belief)
 
-    print("Beliefs after contracting B:", bb.get_formulas())
-    print("Entails B now?", bb.entails("B"))
+        elif choice == "2":
+            print("Remove a belief by typing it exactly as it appears in the base.")
+            belief = input("Enter the belief to remove: ")
+            bb.remove_belief(belief)
 
-    bb.agm_postulates_test("C")
+        elif choice == "3":
+            print("Current belief base:")
+            print(bb.get_formulas())
+            show_after = False  # Don't show again after display
+
+        elif choice == "4":
+            print("Contract the belief base to stop entailing a formula.")
+            belief = input("Enter the belief to contract: ")
+            bb.contract(belief)
+
+        elif choice == "5":
+            print("Revise the belief base by a new belief (Levi identity).")
+            belief = input("Enter the belief to revise with: ")
+            bb.revise(belief)
+
+        elif choice == "6":
+            print("Check if a query is logically entailed by the belief base.")
+            query = input("Enter the query to check entailment: ")
+            print("Entails", query, "?", bb.entails(query))
+
+        elif choice == "7":
+            print("Tests all AGM postulates (Success, Inclusion, Vacuity, Consistency, Extensionality).")
+            belief = input("Enter the belief to test AGM postulates on (or type 'all' to test every belief): ")
+            if belief.lower() == "all":
+                for f in bb.get_formulas():
+                    bb.agm_postulates_test(f)
+            else:
+                bb.agm_postulates_test(belief)
+
+        elif choice == "0":
+            print("Exiting.")
+            break
+
+        else:
+            print("Invalid option. Try again.")
+            show_after = False
+
+        if show_after:
+            print("\nUpdated belief base:")
+            print(bb.get_formulas())
+0
