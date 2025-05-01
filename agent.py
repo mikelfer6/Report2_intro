@@ -49,7 +49,6 @@ class FormulaTransformer:
         return [[formula]]
 
 class ResolutionChecker:
-    @staticmethod
     def resolve(ci, cj):
         resolvents = []
         for di in ci:
@@ -124,7 +123,7 @@ class BeliefBase:
         # Use a copy to avoid modifying the actual belief base
         test_base = copy.deepcopy(self)
 
-        test_base.expand(formula)
+        test_base.expand(formula, silent=True)
         print("1. Success:", test_base.entails(formula))
 
         original_formulas = set(self.get_formulas())
@@ -132,7 +131,7 @@ class BeliefBase:
         print("2. Inclusion:", original_formulas.issubset(updated_formulas))
 
         before = set(test_base.get_formulas())
-        test_base.expand(formula)
+        test_base.expand(formula, silent=True)
         after = set(test_base.get_formulas())
         print("3. Vacuity:", before == after)
 
@@ -140,8 +139,9 @@ class BeliefBase:
 
         formula_negated_negated = FormulaTransformer.negate(FormulaTransformer.negate(formula))
         ext_base = copy.deepcopy(self)
-        ext_base.expand(formula_negated_negated)
+        ext_base.expand(formula_negated_negated, silent=True)
         print("5. Extensionality:", set(test_base.get_formulas()) == set(ext_base.get_formulas()))
+        
 
 if __name__ == "__main__":
     bb = BeliefBase()
@@ -210,4 +210,3 @@ if __name__ == "__main__":
         if show_after:
             print("\nUpdated belief base:")
             print(bb.get_formulas())
-0
