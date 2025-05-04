@@ -1,81 +1,86 @@
 import itertools
 import copy
 
-class FormulaTransformer:
-    @staticmethod
-    def negate(literal):
-        literal = literal.replace("\u00ac", "~")  # Support ¬ for NOT
-        if literal.startswith('~'):
-            return literal[1:]
+"""Help functions for the Belief Base."""
+
+
+def negate(literal):
+    literal = literal.replace("\u00ac", "~")  # Support ¬ for NOT
+    if literal.startswith("~"):
+        return literal[1:]
+    else:
+        return "~" + literal
+
+
+def to_cnf(formula):
+    formula = (
+        formula.replace(" ", "")
+        .replace("->", "=>")
+        .replace("<->", "<=>")
+        .replace("¬", "~")
+    )
+
+    if "=>" in formula:
+        left, right = formula.split("=>")
+        return [[negate(left), right]]
+
+    if "<=>" in formula:
+        left, right = formula.split("<=>")
+        return [[negate(left), right], [left, negate(right)]]
+
+    if formula.startswith("~(") and formula.endswith(")"):
+        inner = formula[2:-1]
+        if "&" in inner:
+            parts = inner.split("&")
+            return [[negate(part)] for part in parts]
+        elif "|" in inner:
+            parts = inner.split("|")
+            return [[negate(part) for part in parts]]
         else:
-            return '~' + literal
+            return [[negate(inner)]]
 
-    @staticmethod
-    def to_cnf(formula):
-        formula = formula.replace(" ", "")
-        formula = formula.replace("->", "=>").replace("<->", "<=>").replace("\u00ac", "~")
+    if "&" in formula:
+        parts = formula.split("&")
+        return [[part] for part in parts]
 
-        if "=>" in formula:
-            parts = formula.split("=>")
-            left = parts[0]
-            right = parts[1]
-            return [[FormulaTransformer.negate(left), right]]
+    if "|" in formula:
+        parts = formula.split("|")
+        return [parts]
 
-        if "<=>" in formula:
-            parts = formula.split("<=>")
-            left = parts[0]
-            right = parts[1]
-            return [[FormulaTransformer.negate(left), right], [left, FormulaTransformer.negate(right)]]
+    return [[formula]]
 
-        if formula.startswith("~(") and formula.endswith(")"):
-            inner = formula[2:-1]
-            if "&" in inner:
-                a, b = inner.split("&")
-                return [[FormulaTransformer.negate(a)], [FormulaTransformer.negate(b)]]
-            elif "|" in inner:
-                a, b = inner.split("|")
-                return [[FormulaTransformer.negate(a), FormulaTransformer.negate(b)]]
-            else:
-                return [[FormulaTransformer.negate(inner)]]
 
-        if "&" in formula:
-            literals = formula.split("&")
-            return [[lit] for lit in literals]
+def resolve(ci, cj):
+    resolvents = []
+    for di in ci:
+        for dj in cj:
+            if di == negate(dj):
+                new_clause = list(set(ci + cj))
+                new_clause.remove(di)
+                new_clause.remove(dj)
+                resolvents.append(new_clause)
+    return resolvents
 
-        if "|" in formula:
-            literals = formula.split("|")
-            return [literals]
 
-        return [[formula]]
+def resolution(clauses):
+    new = set()
+    clauses = set(frozenset(clause) for clause in clauses)
 
-class ResolutionChecker:
-    def resolve(ci, cj):
-        resolvents = []
-        for di in ci:
-            for dj in cj:
-                if di == FormulaTransformer.negate(dj):
-                    new_clause = list(set(ci + cj))
-                    new_clause.remove(di)
-                    new_clause.remove(dj)
-                    resolvents.append(new_clause)
-        return resolvents
+    while True:
+        pairs = [(ci, cj) for ci in clauses for cj in clauses if ci != cj]
+        for ci, cj in pairs:
+            resolvents = resolve(list(ci), list(cj))
+            for resolvent in resolvents:
+                if not resolvent:
+                    return True
+                new.add(frozenset(resolvent))
+        if new.issubset(clauses):
+            return False
+        clauses.update(new)
 
-    @staticmethod
-    def resolution(clauses):
-        new = set()
-        clauses = set(frozenset(clause) for clause in clauses)
 
-        while True:
-            pairs = [(ci, cj) for ci in clauses for cj in clauses if ci != cj]
-            for (ci, cj) in pairs:
-                resolvents = ResolutionChecker.resolve(list(ci), list(cj))
-                for resolvent in resolvents:
-                    if not resolvent:
-                        return True
-                    new.add(frozenset(resolvent))
-            if new.issubset(clauses):
-                return False
-            clauses.update(new)
+"""Belief Base Class"""
+
 
 class BeliefBase:
     def __init__(self):
@@ -93,16 +98,18 @@ class BeliefBase:
         return [f for (_, f) in self.beliefs]
 
     def entails(self, query):
-        clauses = [FormulaTransformer.to_cnf(formula) for formula in self.get_formulas()]
-        query_cnf = FormulaTransformer.to_cnf(f"~({query})")
+        clauses = [to_cnf(formula) for formula in self.get_formulas()]
+        query_cnf = to_cnf(f"~({query})")
         all_clauses = list(itertools.chain(*clauses)) + query_cnf
-        return ResolutionChecker.resolution(all_clauses)
+        return resolution(all_clauses)
 
     def expand(self, formula):
-        if not self.entails(FormulaTransformer.negate(formula)):
+        if not self.entails(negate(formula)):
             self.add_belief(formula)
         else:
-            print(f"Belief '{formula}' was not added because it contradicts current beliefs.")
+            print(
+                f"Belief '{formula}' was not added because it contradicts current beliefs."
+            )
 
     def contract(self, formula):
         if self.entails(formula):
@@ -114,7 +121,7 @@ class BeliefBase:
                     break
 
     def revise(self, formula):
-        self.contract(FormulaTransformer.negate(formula))
+        self.contract(negate(formula))
         self.expand(formula)
 
     def agm_postulates_test(self, formula):
@@ -137,11 +144,14 @@ class BeliefBase:
 
         print("4. Consistency:", not test_base.entails("False"))
 
-        formula_negated_negated = FormulaTransformer.negate(FormulaTransformer.negate(formula))
+        formula_negated_negated = negate(negate(formula))
         ext_base = copy.deepcopy(self)
         ext_base.expand(formula_negated_negated, silent=True)
-        print("5. Extensionality:", set(test_base.get_formulas()) == set(ext_base.get_formulas()))
-        
+        print(
+            "5. Extensionality:",
+            set(test_base.get_formulas()) == set(ext_base.get_formulas()),
+        )
+
 
 if __name__ == "__main__":
     bb = BeliefBase()
@@ -163,11 +173,13 @@ if __name__ == "__main__":
         if choice == "1":
             print("Add a belief to the base. Example: A, A->B, A<->B, A&B, A|B, ¬A")
             belief = input("Enter the belief to add: ")
+            belief = belief.lower().replace(" ", "").replace("=", "-")
             bb.expand(belief)
 
         elif choice == "2":
             print("Remove a belief by typing it exactly as it appears in the base.")
             belief = input("Enter the belief to remove: ")
+            belief = belief.lower().replace(" ", "").replace("=", "-")
             bb.remove_belief(belief)
 
         elif choice == "3":
@@ -178,21 +190,29 @@ if __name__ == "__main__":
         elif choice == "4":
             print("Contract the belief base to stop entailing a formula.")
             belief = input("Enter the belief to contract: ")
+            belief = belief.lower().replace(" ", "").replace("=", "-")
             bb.contract(belief)
 
         elif choice == "5":
             print("Revise the belief base by a new belief (Levi identity).")
             belief = input("Enter the belief to revise with: ")
+            belief = belief.lower().replace(" ", "").replace("=", "-")
             bb.revise(belief)
 
         elif choice == "6":
             print("Check if a query is logically entailed by the belief base.")
             query = input("Enter the query to check entailment: ")
+            query = query.lower().replace(" ", "").replace("=", "-")
             print("Entails", query, "?", bb.entails(query))
 
         elif choice == "7":
-            print("Tests all AGM postulates (Success, Inclusion, Vacuity, Consistency, Extensionality).")
-            belief = input("Enter the belief to test AGM postulates on (or type 'all' to test every belief): ")
+            print(
+                "Tests all AGM postulates (Success, Inclusion, Vacuity, Consistency, Extensionality)."
+            )
+            belief = input(
+                "Enter the belief to test AGM postulates on (or type 'all' to test every belief): "
+            )
+            belief = belief.lower().replace(" ", "").replace("=", "-")
             if belief.lower() == "all":
                 for f in bb.get_formulas():
                     bb.agm_postulates_test(f)
