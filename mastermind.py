@@ -17,36 +17,32 @@ class LogicalMastermindAI:
 
     def encode_feedback_as_belief(self, guess, feedback):
         black, white = feedback
-        belief_clauses = []
+        high = 10  # Very strong belief
+        medium = 5  # Less certain (disjunctive or partial)
 
         if black == 0 and white == 0:
-            # All guessed colors are wrong → exclude from all positions
             for color in guess:
                 for pos in range(1, self.code_length + 1):
                     clause = f"~p{pos}{color}"
-                    belief_clauses.append(clause)
+                    self.belief_base.expand(clause, priority=high)
         else:
-            # Conservative: only exclude if black == 0
             for pos, color in enumerate(guess):
                 var = f"p{pos+1}{color}"
                 if black == 0:
-                    belief_clauses.append(negate(var))
+                    self.belief_base.expand(negate(var), priority=medium)
 
-            # For colors with at least some hit, state "color is somewhere"
             for color in set(guess):
-                total_hits = sum(1 for i, c in enumerate(guess) if c == color)
-                if total_hits > 0 and (black > 0 or white > 0):
+                if (black + white) > 0:
                     or_clause = []
                     for pos in range(1, self.code_length + 1):
-                        # Allow positions not ruled out already by direct black exclusion
-                        if guess[pos - 1] != color:
-                            or_clause.append(f"p{pos}{color}")
+                        or_clause.append(f"p{pos}{color}")
+
                     if or_clause:
                         clause = "|".join(or_clause)
-                        self.belief_base.expand(clause)
+                        self.belief_base.expand(clause, priority=medium)
 
-        for clause in belief_clauses:
-            self.belief_base.expand(clause)
+        if not self.belief_base.is_consistent():
+            self.belief_base.auto_fix()
 
     def consistent_with_beliefs(self, code):
         for pos, color in enumerate(code):
@@ -74,8 +70,10 @@ class LogicalMastermindAI:
 
 # Example usage
 if __name__ == "__main__":
-    ai = LogicalMastermindAI()
-    secret_code = ("o", "o", "o", "y")  # Use lowercase letters
+    ai = LogicalMastermindAI(
+        colors="rgbyop"
+    )  # red, green, blue, yellow, orange, purple
+    secret_code = ("r", "o", "o", "y")
 
     for turn in range(10):
         guess = ai.make_guess()
@@ -90,6 +88,4 @@ if __name__ == "__main__":
             break
         ai.update_knowledge(guess, fb)
 
-        print("Belief Base:")
-        print(ai.belief_base.get_formulas())
-        print("\n")
+        print("\Belief base:", ai.belief_base.get_formulas(), "\n")
