@@ -1,5 +1,6 @@
 import itertools
-from agent import BeliefBase, negate
+from belief_base import BeliefBase
+from functions import negate
 
 
 class LogicalMastermindAI:
@@ -66,26 +67,3 @@ class LogicalMastermindAI:
             if self.consistent_with_beliefs(code):
                 return code
         return None
-
-
-# Example usage
-if __name__ == "__main__":
-    ai = LogicalMastermindAI(
-        colors="rgbyop"
-    )  # red, green, blue, yellow, orange, purple
-    secret_code = ("r", "o", "o", "y")
-
-    for turn in range(10):
-        guess = ai.make_guess()
-        if guess is None:
-            print("No consistent guesses left. Belief contradiction?")
-            break
-        print(f"Turn {turn+1}: AI guesses {guess}")
-        fb = ai.feedback(guess, secret_code)
-        print(f"Feedback: {fb[0]} black, {fb[1]} white")
-        if fb[0] == ai.code_length:
-            print("AI solved the code!")
-            break
-        ai.update_knowledge(guess, fb)
-
-        print("\Belief base:", ai.belief_base.get_formulas(), "\n")
