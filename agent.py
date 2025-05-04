@@ -20,13 +20,17 @@ def to_cnf(formula):
         .replace("¬", "~")
     )
 
-    if "=>" in formula:
-        left, right = formula.split("=>")
-        return [[negate(left), right]]
-
     if "<=>" in formula:
-        left, right = formula.split("<=>")
-        return [[negate(left), right], [left, negate(right)]]
+        parts = formula.split("<=>", 1)
+        if len(parts) == 2:
+            left, right = parts
+            return [[negate(left), right], [left, negate(right)]]
+
+    if "=>" in formula:
+        parts = formula.split("=>", 1)
+        if len(parts) == 2:
+            left, right = parts
+            return [[negate(left), right]]
 
     if formula.startswith("~(") and formula.endswith(")"):
         inner = formula[2:-1]
@@ -103,13 +107,17 @@ class BeliefBase:
         all_clauses = list(itertools.chain(*clauses)) + query_cnf
         return resolution(all_clauses)
 
-    def expand(self, formula):
-        if not self.entails(negate(formula)):
-            self.add_belief(formula)
-        else:
-            print(
-                f"Belief '{formula}' was not added because it contradicts current beliefs."
-            )
+    def is_consistent(self):
+        return not self.entails("False")
+
+    def expand(self, formula, priority=0):
+        if formula in self.get_formulas():
+            return
+
+        self.add_belief(formula, priority)
+
+        if not self.is_consistent():
+            print(f"Warning: belief base is now inconsistent after adding '{formula}'.")
 
     def contract(self, formula):
         if self.entails(formula):
@@ -126,30 +134,42 @@ class BeliefBase:
 
     def agm_postulates_test(self, formula):
         print("\nTesting all AGM Postulates for:", formula)
-
-        # Use a copy to avoid modifying the actual belief base
         test_base = copy.deepcopy(self)
-
-        test_base.expand(formula, silent=True)
+        test_base.expand(formula)
         print("1. Success:", test_base.entails(formula))
-
         original_formulas = set(self.get_formulas())
         updated_formulas = set(test_base.get_formulas())
         print("2. Inclusion:", original_formulas.issubset(updated_formulas))
-
         before = set(test_base.get_formulas())
-        test_base.expand(formula, silent=True)
+        test_base.expand(formula)
         after = set(test_base.get_formulas())
         print("3. Vacuity:", before == after)
-
         print("4. Consistency:", not test_base.entails("False"))
-
         formula_negated_negated = negate(negate(formula))
         ext_base = copy.deepcopy(self)
-        ext_base.expand(formula_negated_negated, silent=True)
+        ext_base.expand(formula_negated_negated)
         print(
             "5. Extensionality:",
             set(test_base.get_formulas()) == set(ext_base.get_formulas()),
+        )
+
+    def auto_fix(self):
+        if self.is_consistent():
+            print("Belief base is already consistent.")
+            return
+
+        print("Inconsistency detected. Attempting to fix...")
+        for priority, belief in sorted(self.beliefs, key=lambda x: x[0]):
+            print(f"Trying to remove: {belief} (priority {priority})")
+            temp = copy.deepcopy(self)
+            temp.remove_belief(belief)
+            if temp.is_consistent():
+                self.remove_belief(belief)
+                print(f"Removed belief '{belief}' to restore consistency.")
+                return self.auto_fix()
+
+        print(
+            "Failed to restore consistency automatically. Manual review may be required."
         )
 
 
@@ -165,6 +185,7 @@ if __name__ == "__main__":
         print("5. Revise a belief")
         print("6. Check entailment")
         print("7. Test AGM postulates")
+        print("8. Auto-fix inconsistent belief base")
         print("0. Exit")
 
         choice = input("Choose an option: ")
@@ -174,7 +195,8 @@ if __name__ == "__main__":
             print("Add a belief to the base. Example: A, A->B, A<->B, A&B, A|B, ¬A")
             belief = input("Enter the belief to add: ")
             belief = belief.lower().replace(" ", "").replace("=", "-")
-            bb.expand(belief)
+            priority = int(input("Enter the priority (0 for default): ") or 0)
+            bb.expand(belief, priority)
 
         elif choice == "2":
             print("Remove a belief by typing it exactly as it appears in the base.")
@@ -185,7 +207,7 @@ if __name__ == "__main__":
         elif choice == "3":
             print("Current belief base:")
             print(bb.get_formulas())
-            show_after = False  # Don't show again after display
+            show_after = False
 
         elif choice == "4":
             print("Contract the belief base to stop entailing a formula.")
@@ -218,6 +240,10 @@ if __name__ == "__main__":
                     bb.agm_postulates_test(f)
             else:
                 bb.agm_postulates_test(belief)
+
+        elif choice == "8":
+            print("Automatically fixing inconsistent belief base...")
+            bb.auto_fix()
 
         elif choice == "0":
             print("Exiting.")
