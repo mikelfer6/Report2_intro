@@ -48,7 +48,7 @@ def draw_final_secret_code(screen, font, code):
 
 def draw_turn_counter(screen, font, turn):
     """Draw current turn number at bottom right."""
-    turn_text = font.render(f"Turn: {turn}", True, BLACK)
+    turn_text = font.render(f"Turn: {turn -1}", True, BLACK)
     screen.blit(turn_text, (WIDTH - 120, HEIGHT - 70))
 
 
