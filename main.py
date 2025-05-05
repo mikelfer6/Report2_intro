@@ -1,22 +1,20 @@
 from belief_base import BeliefBase
 from mastermind import LogicalMastermindAI
+from mastermind_interface import mastermind_visualizer
 import itertools
-
-"""Select what to run"""
 
 print("Welcome! What would you like to run?")
 print("1. Belief Base Assistant")
-print("2. Logical Mastermind AI")
+print("2. Logical Mastermind AI (Terminal)")
+print("3. Logical Mastermind AI (Graphical Interface)")
 
 while True:
-    run = input("Enter 1 or 2: ").strip()
-    if run == "1" or run == "2":
+    run = input("Enter 1, 2 or 3: ").strip()
+    if run in ["1", "2", "3"]:
         break
-    print("Invalid selection. Please enter 1 or 2.")
+    print("Invalid selection. Please enter 1, 2 or 3.")
 
-
-
-if run == 1:
+if run == "1":
     bb = BeliefBase()
 
     while True:
@@ -71,12 +69,8 @@ if run == 1:
             print("Entails", query, "?", bb.entails(query))
 
         elif choice == "7":
-            print(
-                "Tests all AGM postulates (Success, Inclusion, Vacuity, Consistency, Extensionality)."
-            )
-            belief = input(
-                "Enter the belief to test AGM postulates on (or type 'all' to test every belief): "
-            )
+            print("Tests all AGM postulates (Success, Inclusion, Vacuity, Consistency, Extensionality).")
+            belief = input("Enter the belief to test AGM postulates on (or type 'all' to test every belief): ")
             belief = belief.lower().replace(" ", "").replace("=", "-")
             if belief.lower() == "all":
                 for f in bb.get_formulas():
@@ -100,15 +94,16 @@ if run == 1:
             print("\nUpdated belief base:")
             print(bb.get_formulas())
 
-else:
-    ai = LogicalMastermindAI(
-        colors="rgbyop"
-    )  # red, green, blue, yellow, orange, purple
-    print("Welcome to the Logical Mastermind AI!")
+elif run == "2":
+    ai = LogicalMastermindAI(colors="rgbyop")
+    print("Welcome to the Logical Mastermind AI (Terminal Mode)!")
     print("The AI will try to guess the secret code using logical reasoning.")
-    secret_code = input(
-        "Enter the secret code (4 colors from rgbyop, e.g., 'rgby'): "
-    ).lower()
+    secret_code = input("Enter the secret code (4 colors from rgbyop, e.g., 'rgby'): ").lower()
+
+    while len(secret_code) != 4 or any(c not in "rgbyop" for c in secret_code):
+        print("Invalid code. Please use 4 letters from: r, g, b, y, o, p.")
+        secret_code = input("Enter the secret code (e.g., 'rgby'): ").lower()
+
     secret_code = tuple(secret_code)
     print("\n")
 
@@ -124,5 +119,40 @@ else:
             print("AI solved the code!")
             break
         ai.update_knowledge(guess, fb)
-
         print("\Belief base:", ai.belief_base.get_formulas(), "\n")
+
+elif run == "3":
+    ai = LogicalMastermindAI(colors="rgbyop")
+    print("Welcome to the Logical Mastermind AI (Terminal Mode)!")
+    print("The AI will try to guess the secret code using logical reasoning.")
+    secret_code = input("Enter the secret code (4 colors from rgbyop, e.g., 'rgby'): ").lower()
+
+    while len(secret_code) != 4 or any(c not in "rgbyop" for c in secret_code):
+        print("Invalid code. Please use 4 letters from: r, g, b, y, o, p.")
+        secret_code = input("Enter the secret code (e.g., 'rgby'): ").lower()
+
+    secret_code = tuple(secret_code)
+    print("\n")
+
+    history = []  # To store (guess, feedback) for the interface
+
+    for turn in range(10):
+        guess = ai.make_guess()
+        if guess is None:
+            print("No consistent guesses left. Belief contradiction?")
+            break
+
+        print(f"Turn {turn+1}: AI guesses {guess}")
+        fb = ai.feedback(guess, secret_code)
+        print(f"Feedback: {fb[0]} black, {fb[1]} white")
+        history.append((guess, fb))
+
+        if fb[0] == ai.code_length:
+            print("AI solved the code!")
+            break
+
+        ai.update_knowledge(guess, fb)
+        print("\Belief base:", ai.belief_base.get_formulas(), "\n")
+
+    # Show the game in graphical interface
+    mastermind_visualizer(secret_code, history)

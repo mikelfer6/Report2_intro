@@ -67,3 +67,20 @@ class LogicalMastermindAI:
             if self.consistent_with_beliefs(code):
                 return code
         return None
+    
+    def compute_feedback(self, secret, guess):
+        """Compute feedback in (black, white) format."""
+        return self.feedback(guess, secret)
+
+    def receive_feedback(self, guess, feedback):
+        """Update belief base and filter codes after receiving feedback."""
+        self.update_knowledge(guess, feedback)
+
+    def generate_all_codes(self, colors, length):
+        """Generate all color combinations as tuples of strings."""
+        return list(itertools.product(map(str, colors), repeat=length))
+
+    @property
+    def belief_base_size(self):
+        """Return the current number of consistent valid codes."""
+        return len(self.known_valid_codes)
