@@ -4,9 +4,17 @@ import itertools
 
 """Select what to run"""
 
-run = 2  # 1 for Belief Base, 2 for Logical Mastermind AI
+print("Welcome! What would you like to run?")
+print("1. Belief Base Assistant")
+print("2. Logical Mastermind AI")
 
-""" Do not change below this line """
+while True:
+    run = input("Enter 1 or 2: ").strip()
+    if run == "1" or run == "2":
+        break
+    print("Invalid selection. Please enter 1 or 2.")
+
+
 
 if run == 1:
     bb = BeliefBase()
